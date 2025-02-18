@@ -1,5 +1,8 @@
 const $ = document.querySelector.bind(document);
 const $$ = document.querySelectorAll.bind(document);
+
+const PLAYER_STORAGE_KEY = 'TAM_PLAYER';
+
 const player = $(".player");
 const heading = $("header h2");
 const cdThumb = $(".cd-thumb");
@@ -9,9 +12,20 @@ const playBtn = $(".btn-toggle-play");
 const nextBtn = $(".btn-next");
 const prevBtn = $(".btn-prev");
 const progress = $("#progress");
+const randomBtn = $(".btn-random");
+const repeatBtn = $('.btn-repeat');
+const playlist = $('.playlist')
+
 const app = {
     currentIndex: 0,
     isPlaying: false,
+    isRandom: false,
+    isRepeat: false,
+    config: JSON.parse(localStorage.getItem(PLAYER_STORAGE_KEY)) || {},
+    setConfig: function (key, value) {
+        this.config[key] = value;
+        localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(this.config));
+    },
     songs: [
         {
             name: "Đừng Làm Trái Tim Anh Đau",
@@ -50,28 +64,27 @@ const app = {
             image: "./assets/img/song6.png",
         },
         {
-            name: "Mất Kết Nối",
-            singer: "Dương Domic",
-            path: "./assets/music/song6.mp3",
-            image: "./assets/img/song6.png",
+            name: "Một bài hát không vui mấy (Extended Version)",
+            singer: "T.R.I, Dangrangto và DONAL",
+            path: "./assets/music/song7.mp3",
+            image: "./assets/img/song7.png",
         },
         {
-            name: "Mất Kết Nối",
-            singer: "Dương Domic",
-            path: "./assets/music/song6.mp3",
-            image: "./assets/img/song6.png",
-        },
-        {
-            name: "Mất Kết Nối",
-            singer: "Dương Domic",
-            path: "./assets/music/song6.mp3",
-            image: "./assets/img/song6.png",
-        },
+            name: "ANH BIẾT RỒI (cùng với RHYDER)",
+            singer: "RHYDER",
+            path: "./assets/music/song8.mp3",
+            image: "./assets/img/song8.png",
+        }, {
+            name: "CHÂN THÀNH (cùng với RHYDER, CAPTAIN, QUANG HÙNG MASTERD và WEAN)",
+            singer: "ANH TRAI SAY HI • TẬP 10 - ANH TRAI SAY HI• 2024",
+            path: "./assets/music/song9.mp3",
+            image: "./assets/img/song9.png",
+        }
     ],
     render: function () {
-        const htmls = this.songs.map((song) => {
+        const htmls = this.songs.map((song, index) => {
             return `
-            <div class="song">
+            <div class="song ${index === this.currentIndex ? 'active' : ''}" data-index="${index}"> 
                 <div class="thumb"
                     style="background-image: url('${song.image}')">
                 </div>
@@ -84,7 +97,7 @@ const app = {
                 </div>
             </div>`;
         });
-        $(".playlist").innerHTML = htmls.join("");
+        playlist.innerHTML = htmls.join("");
     },
     defineProperties: function () {
         Object.defineProperty(this, "currentSong", {
@@ -152,20 +165,84 @@ const app = {
 
         //Khi next song
         nextBtn.onclick = function () {
-            _this.nextSong();
+            if (_this.isRandom) {
+                _this.playRandomSong();
+            } else {
+                _this.nextSong();
+            }
             audio.play();
+            _this.render();
+            _this.scrollToActiveSong();
         }
 
         //Khi prev song
         prevBtn.onclick = function () {
-            _this.prevSong();
+            if (_this.isRandom) {
+                _this.playRandomSong();
+            } else {
+                _this.prevSong();
+            }
             audio.play();
+            _this.scrollToActiveSong();
         }
+
+        //Xu ly bat/ tat random song
+        randomBtn.onclick = function (e) {
+            _this.isRandom = !_this.isRandom;
+            _this.setConfig('isRandom', _this.isRandom);
+            randomBtn.classList.toggle("active", _this.isRandom);
+        }
+
+        //Xu li lap lai mot song
+        repeatBtn.onclick = function () {
+            _this.isRepeat = !_this.isRepeat;
+            _this.setConfig('isRepeat', _this.isRepeat);
+            repeatBtn.classList.toggle('active', _this.isRepeat);
+        }
+
+        //Xu ly next song khi audio ended
+        audio.onended = function () {
+            if (_this.isRepeat)
+                audio.play();
+            else
+                nextBtn.click();
+        }
+
+        //Lang nghe hanh vi click vao playlist
+        playlist.onclick = function (e) {
+            const songNode = e.target.closest('.song:not(.active)')
+            if (songNode || e.target.closest('.option')) {
+                // Xu li khi click vao song
+                if (songNode) {
+                    _this.currentIndex = Number(songNode.dataset.index);
+                    _this.loadCurrentSong();
+                    audio.play();
+                    _this.render();
+                }
+
+                //Xu li khi click vao song option
+                if (e.target.closest('.option')) {
+
+                }
+            }
+        }
+    },
+    scrollToActiveSong: function () {
+        setTimeout(() => {
+            $('.song.active').scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+            })
+        }, 300)
     },
     loadCurrentSong: function () {
         heading.textContent = this.currentSong.name;
         cdThumb.style.backgroundImage = `url('${this.currentSong.image}')`;
         audio.src = this.currentSong.path;
+    },
+    loadConfig: function () {
+        this.isRandom = this.config.isRandom;
+        this.isRepeat = this.config.isRepeat;
     },
     nextSong: function () {
         this.currentIndex++;
@@ -181,7 +258,19 @@ const app = {
         }
         this.loadCurrentSong();
     },
+    playRandomSong: function () {
+        let newIndex;
+        do {
+            newIndex = Math.floor(Math.random() * this.songs.length);
+        } while (newIndex === this.currentIndex);
+
+        this.currentIndex = newIndex;
+        this.loadCurrentSong();
+    },
     start: function () {
+        //Gan cau hinh tu config vao ung dung
+        this.loadConfig();
+
         // Định nghĩa các thuộc tính cho object
         this.defineProperties();
 
@@ -193,6 +282,10 @@ const app = {
 
         // Render playlist
         this.render();
+
+        //Hien thi trang thai ban dau cua button repeat & random
+        randomBtn.classList.toggle("active", _this.isRandom);
+        repeatBtn.classList.toggle('active', _this.isRepeat);
     },
 };
 
